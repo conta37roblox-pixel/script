@@ -1,0 +1,215 @@
+warn(">>> [DEV TOOL] INICIANDO ADMIN SUITE V44 (SAFE UI MODE)...")
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- >> CARREGAMENTO DA UI (RESET)
+if not LocalPlayer.PlayerGui then LocalPlayer:GetPropertyChangedSignal("PlayerGui"):Wait() end
+local PlayerGui = LocalPlayer.PlayerGui
+for _, v in pairs(PlayerGui:GetChildren()) do if v.Name == "AdminSuite_V44" then v:Destroy() end end
+
+-- ==============================================================================
+-- 1. CONSTRUÇÃO DA INTERFACE (AGORA VEM PRIMEIRO)
+-- ==============================================================================
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AdminSuite_V44"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+local function MakeDraggable(gui)
+	local dragging, dragInput, startPos, dragStart
+	gui.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true; dragStart = input.Position; startPos = gui.Position
+		end
+	end)
+	gui.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end end)
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - dragStart
+			gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+end
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 360, 0, 450)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -225)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(0, 255, 150); Instance.new("UIStroke", MainFrame).Thickness = 2
+MakeDraggable(MainFrame)
+
+-- TÍTULO
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1,0,0,30); Title.BackgroundTransparency = 1
+Title.Text = "ADMIN SUITE V44"; Title.TextColor3 = Color3.fromRGB(0, 255, 150)
+Title.Font = Enum.Font.GothamBlack; Title.TextSize = 18
+
+-- STATUS DO MÓDULO (IMPORTANTE)
+local StatusLabel = Instance.new("TextLabel", MainFrame)
+StatusLabel.Size = UDim2.new(1,0,0,20); StatusLabel.Position = UDim2.new(0,0,0.07,0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "STATUS: CARREGANDO..."; StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+StatusLabel.Font = Enum.Font.Code; StatusLabel.TextSize = 12
+
+-- INPUT ALVO
+local TargetInput = Instance.new("TextBox", MainFrame)
+TargetInput.Size = UDim2.new(0.9, 0, 0, 35); TargetInput.Position = UDim2.new(0.05, 0, 0.15, 0)
+TargetInput.PlaceholderText = "Nome do Jogador / Argumento"; TargetInput.Text = ""
+TargetInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50); TargetInput.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", TargetInput).CornerRadius = UDim.new(0, 6)
+
+-- SCROLLING FRAME
+local GridScroll = Instance.new("ScrollingFrame", MainFrame)
+GridScroll.Size = UDim2.new(0.9, 0, 0.7, 0); GridScroll.Position = UDim2.new(0.05, 0, 0.25, 0)
+GridScroll.BackgroundTransparency = 1; GridScroll.BorderSizePixel = 0
+GridScroll.CanvasSize = UDim2.new(0, 0, 1.2, 0)
+local UIList = Instance.new("UIGridLayout", GridScroll)
+UIList.CellSize = UDim2.new(0.48, 0, 0, 40); UIList.CellPadding = UDim2.new(0.04, 0, 0.02, 0)
+
+-- ==============================================================================
+-- 2. CARREGAMENTO DO MÓDULO (LÓGICA)
+-- ==============================================================================
+
+local Packets = nil
+local ModulePath = nil
+
+-- Tenta achar o módulo em vários lugares caso o caminho tenha mudado
+local possiblePaths = {
+	ReplicatedStorage:FindFirstChild("LocalModules") and ReplicatedStorage.LocalModules:FindFirstChild("Backend") and ReplicatedStorage.LocalModules.Backend:FindFirstChild("Packets"),
+	ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Packets"),
+	ReplicatedStorage:FindFirstChild("Packet"), -- Às vezes fica na raiz
+}
+
+for _, path in pairs(possiblePaths) do
+	if path then ModulePath = path break end
+end
+
+-- Se não achou nos caminhos padrão, faz uma busca profunda
+if not ModulePath then
+	for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+		if v.Name == "Packets" and v:IsA("ModuleScript") then
+			ModulePath = v
+			break
+		end
+	end
+end
+
+-- Tenta Carregar
+if ModulePath then
+	local success, result = pcall(function() return require(ModulePath) end)
+	if success then
+		Packets = result
+		StatusLabel.Text = "STATUS: ONLINE (MÓDULO CONECTADO)"
+		StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+	else
+		StatusLabel.Text = "STATUS: ERRO AO CARREGAR (REQUIRE FAIL)"
+		StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+		warn("Require falhou: " .. tostring(result))
+	end
+else
+	StatusLabel.Text = "STATUS: ERRO (MÓDULO NÃO ENCONTRADO)"
+	StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+	warn("Não achei o ModuleScript 'Packets' em lugar nenhum.")
+end
+
+-- ==============================================================================
+-- 3. FUNÇÕES E BOTÕES
+-- ==============================================================================
+
+local function FirePacket(name, ...)
+	if not Packets then
+		StatusLabel.Text = "ERRO: Módulo Offline. Não posso disparar."
+		warn("Tentativa de disparo sem módulo.")
+		return
+	end
+	
+	if Packets[name] then
+		pcall(function() Packets[name]:Fire(...) end)
+		StatusLabel.Text = "Enviado: " .. name
+	else
+		StatusLabel.Text = "ERRO: Packet '"..name.."' não existe."
+	end
+end
+
+local function GetTarget()
+	local text = TargetInput.Text
+	if text == "" then return LocalPlayer end
+	for _, p in pairs(Players:GetPlayers()) do
+		if string.find(string.lower(p.Name), string.lower(text)) then return p end
+	end
+	return nil
+end
+
+local function AddBtn(text, color, callback)
+	local btn = Instance.new("TextButton", GridScroll)
+	btn.Text = text; btn.BackgroundColor3 = color; btn.TextColor3 = Color3.new(1,1,1)
+	btn.Font = Enum.Font.GothamBold; btn.TextSize = 11
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	btn.MouseButton1Click:Connect(callback)
+end
+
+-- ADICIONANDO BOTÕES
+AddBtn("ATIVAR 'TRUE ADMIN'", Color3.fromRGB(255, 150, 0), function()
+	FirePacket("TrueAdmin")
+	FirePacket("Admin", true)
+end)
+
+AddBtn("BRING ALL (PUXAR TODOS)", Color3.fromRGB(0, 100, 255), function()
+	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+		FirePacket("BringAll", LocalPlayer.Character.HumanoidRootPart.CFrame)
+		FirePacket("BringAll") 
+	end
+end)
+
+AddBtn("ADD COIN", Color3.fromRGB(255, 200, 0), function()
+	FirePacket("Coin")
+end)
+
+AddBtn("VIP UNLOCK", Color3.fromRGB(150, 0, 200), function()
+	FirePacket("VIPUnlock")
+end)
+
+AddBtn("KICK (SALA)", Color3.fromRGB(200, 50, 0), function()
+	local p = GetTarget()
+	if p then FirePacket("RoomPlayerKick", p) end
+end)
+
+AddBtn("BANIR ALVO", Color3.fromRGB(150, 0, 0), function()
+	local p = GetTarget()
+	if p then
+		FirePacket("Ban", p, 999999, "Audit", "Perm")
+		FirePacket("Ban", p.UserId, 999999, "Audit", nil)
+	else
+		StatusLabel.Text = "ERRO: Digite o nome do alvo!"
+	end
+end)
+
+AddBtn("UNBAN (ID)", Color3.fromRGB(0, 150, 0), function()
+	local id = tonumber(TargetInput.Text)
+	if id then FirePacket("Unban", id) else StatusLabel.Text = "ERRO: Digite o ID numérico!" end
+end)
+
+AddBtn("SMITE (RAIO)", Color3.fromRGB(50, 50, 255), function()
+	local p = GetTarget()
+	if p and p.Character then FirePacket("Smite", p.Character) end
+end)
+
+AddBtn("JUMPSCARE", Color3.fromRGB(100, 0, 0), function()
+	local p = GetTarget()
+	if p then FirePacket("Jumpscare", p.Character) end
+end)
+
+AddBtn("WARN (AVISO)", Color3.fromRGB(200, 200, 0), function()
+	local p = GetTarget()
+	if p then FirePacket("Warn", p.UserId, "Teste", nil) end
+end)
+
+warn(">>> [V44] UI CARREGADA. VERIFIQUE O STATUS NO TOPO DO MENU.")
